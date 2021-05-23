@@ -1,0 +1,18 @@
+[package]
+name = "async_smoltcp"
+version = "0.1.0"
+authors = ["Lucas Zanella <me@lucaszanella.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = ["tap", "tun", "vpn"]
+vpn = []
+tap = []
+tun = []
+
+[dependencies]
+smoltcp = {git = "https://github.com/lucaszanella/smoltcp/", branch="ip-interface-alt-managed"}
+tokio = { version = "1.4.0", features = ["rt-multi-thread", "macros", "net", "io-util", "rt", "time"] }
+futures = { version="0.3.13", default-features = false, features = ["std", "executor"] }
+log = { version="0.4.14", default-features = false }
