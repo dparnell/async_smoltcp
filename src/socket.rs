@@ -1,11 +1,8 @@
-//use super::network_stack::IpAddress;
 use futures::future::Future;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
-
-//use super::network_stack::{AsyncNetworkStack, NetworkStack};
 
 #[derive(PartialEq, Clone)]
 pub enum SocketType {
@@ -39,8 +36,6 @@ pub type OnTcpSocketData = Arc<dyn Fn(&[u8]) -> Result<usize, SocketReceiveError
 pub type OnUdpSocketData = Arc<dyn Fn(&[u8], IpAddr, u16) -> Result<usize, SocketReceiveError>>;
 
 pub trait Socket {
-    //fn set_on_tcp_socket_data(&mut self, on_tcp_socket_data: OnTcpSocketData);
-    //fn set_on_udp_socket_data(&mut self, on_tcp_socket_data: OnUdpSocketData);
     fn tcp_socket_send(&mut self, data: &[u8]) -> Result<usize, SocketSendError>;
     fn udp_socket_send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, SocketSendError>;
     fn tcp_connect(&mut self, addr: SocketAddr, port: u16) -> Result<(), SocketConnectionError>;
@@ -50,10 +45,8 @@ pub trait Socket {
         f: &dyn Fn(&[u8], SocketAddr, u16),
     ) -> Result<usize, SocketReceiveError>;
 }
-
+#[cfg(feature = "async")]
 pub trait AsyncSocket {
-    //fn set_on_tcp_socket_data(&mut self, on_tcp_socket_data: OnTcpSocketData);
-    //fn set_on_udp_socket_data(&mut self, on_tcp_socket_data: OnUdpSocketData);
     fn tcp_socket_send<'a>(
         &'a mut self,
         data: &'a [u8],

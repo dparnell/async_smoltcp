@@ -1,9 +1,8 @@
-//use super::network_stack::{AsyncNetworkStack, NetworkStack};
 use super::socket::{
     AsyncSocket, OnTcpSocketData, OnUdpSocketData, Socket, SocketConnectionError,
     SocketReceiveError, SocketSendError, SocketType,
 };
-
+#[cfg(feature = "vpn")]
 use super::vpn_client::{
     PhyReceive, PhyReceiveError, PhySend, PhySendError, VpnClient, VpnConnectionError,
     VpnDisconnectionError,
@@ -14,6 +13,7 @@ use futures::executor::block_on;
 use futures::future::Future;
 use futures::future::{BoxFuture, FutureExt};
 use futures::lock::Mutex;
+#[cfg(feature = "log")]
 #[allow(dead_code)]
 use log::{debug, error, info, warn};
 use smoltcp::iface::{Interface, InterfaceBuilder, Routes};
@@ -27,8 +27,8 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
+#[cfg(feature = "async")]
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::pin;
 
 use super::virtual_tun::{
     OnVirtualTunRead, OnVirtualTunWrite, VirtualTunInterface as VirtualTunDevice,
@@ -263,6 +263,7 @@ impl SmolStackWithDevice {
             .finalize();
 
         let default_v4_gateway = default_v4_gateway.unwrap_or(Ipv4Address::new(192, 168, 69, 100));
+        //TODO: find a good ipv6 to use
         let default_v6_gateway =
             default_v6_gateway.unwrap_or(Ipv6Address::new(1, 1, 1, 1, 1, 1, 1, 1));
 
@@ -407,10 +408,7 @@ impl SmolStackWithDevice {
                 handle,
                 (SocketType::TCP, OnSocketData::tcp(on_tcp_socket_data)),
             );
-            /*
-            let smol_socket = SmolSocket::new(stack.clone(), handle);
-            Ok(smol_socket)
-            */
+
             Ok(handle)
         })
     }
@@ -425,8 +423,6 @@ impl SmolStackWithDevice {
             let tx_buffer = UdpSocketBuffer::new(Vec::new(), vec![0; 1024]);
             let socket = UdpSocket::new(rx_buffer, tx_buffer);
             let handle = stack_.sockets.add(socket);
-            //let smol_socket = SmolSocket::new(stack.clone(), handle);
-            //Ok(smol_socket)
             Ok(handle)
         })
     }
@@ -627,7 +623,7 @@ impl SmolSocket {
     */
 }
 
-
+#[cfg(feature = "async")]
 impl AsyncRead for SmolSocket {
     fn poll_read(
         self: Pin<&mut Self>,
@@ -650,7 +646,7 @@ impl AsyncRead for SmolSocket {
         
     }
 }
-
+#[cfg(feature = "async")]
 impl AsyncWrite for SmolSocket {
     fn poll_write(
         self: Pin<&mut Self>,
@@ -678,15 +674,12 @@ impl AsyncWrite for SmolSocket {
     }
 }
 
-//unsafe impl<'a> Send for SmolSocket<'a> {}
-
 pub type SafeSmolStackWithDevice = SmolStackWithDevice;
 
 //TODO: instead, implement Send for the C types?
 unsafe impl Send for SafeSmolStackWithDevice{}
 
-//impl AsyncNetworkStack for SmolSocket {}
-
+#[cfg(feature = "async")]
 impl AsyncSocket for SmolSocket {
     fn tcp_socket_send<'d>(
         &'d mut self,
