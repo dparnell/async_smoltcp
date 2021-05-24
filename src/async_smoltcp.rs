@@ -1,25 +1,4 @@
-use super::socket::{
-    AsyncSocket, OnTcpSocketData, OnUdpSocketData, Socket, SocketConnectionError,
-    SocketReceiveError, SocketSendError, SocketType,
-};
-#[cfg(feature = "vpn")]
-use super::vpn_client::{
-    PhyReceive, PhyReceiveError, PhySend, PhySendError, VpnClient, VpnConnectionError,
-    VpnDisconnectionError,
-};
-
 use core::task::{Context, Poll, Waker};
-use futures::executor::block_on;
-use futures::future::Future;
-use futures::future::{BoxFuture, FutureExt};
-use futures::lock::Mutex;
-#[cfg(feature = "log")]
-#[allow(dead_code)]
-use log::{debug, error, info, warn};
-use smoltcp::iface::{Interface, InterfaceBuilder, Routes};
-use smoltcp::time::Instant;
-pub use smoltcp::wire::IpAddress;
-pub use smoltcp::{Error as SmoltcpError, Result as SmoltcpResult};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -27,13 +6,32 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-#[cfg(feature = "async")]
-use tokio::io::{AsyncRead, AsyncWrite};
 
+use futures::executor::block_on;
+use futures::future::Future;
+use futures::future::{BoxFuture, FutureExt};
+use futures::lock::Mutex;
+
+use smoltcp::iface::{Interface, InterfaceBuilder, Routes};
+use smoltcp::time::Instant;
+pub use smoltcp::wire::IpAddress;
+pub use smoltcp::{Error as SmoltcpError, Result as SmoltcpResult};
+
+use super::socket::{
+    AsyncSocket, OnTcpSocketData, OnUdpSocketData, Socket, SocketConnectionError,
+    SocketReceiveError, SocketSendError, SocketType,
+};
 use super::virtual_tun::{
     OnVirtualTunRead, OnVirtualTunWrite, VirtualTunInterface as VirtualTunDevice,
     VirtualTunReadError, VirtualTunWriteError,
 };
+#[cfg(feature = "vpn")]
+use super::vpn_client::{
+    PhyReceive, PhyReceiveError, PhySend, PhySendError, VpnClient, VpnConnectionError,
+    VpnDisconnectionError,
+};
+#[cfg(feature = "log")]
+use log::{debug, error, info, warn};
 use smoltcp::phy::Device;
 use smoltcp::phy::TapInterface as TapDevice;
 use smoltcp::phy::TunInterface as TunDevice;
@@ -44,9 +42,10 @@ pub use smoltcp::wire::{IpCidr, IpEndpoint, Ipv4Address, Ipv6Address};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::io::{self, AsyncWriteExt as _};
+#[cfg(feature = "async")]
+use tokio::io::{AsyncRead, AsyncWrite};
 
-use super::DEFAULT_MTU;
+use crate::DEFAULT_MTU;
 
 pub enum PollWaitError {
     NoPollWait,
@@ -129,8 +128,7 @@ pub enum SmolStackWithDevice {
 
 impl SmolStackWithDevice {
     pub fn run(stack: Arc<Mutex<Self>>) {
-        //let stack = stack.clone();
-        let stack_thread = std::thread::Builder::new()
+        std::thread::Builder::new()
             .name("stack_thread".to_string())
             .spawn(move || {
                 let stack = stack.clone();
@@ -218,7 +216,6 @@ impl SmolStackWithDevice {
 
         //let data_from_socket_ = data_from_socket.clone();
         let read_wake_deque_ = read_wake_deque.clone();
- 
         let read_wake_deque_ = read_wake_deque.clone();
         let on_dns_udp_data = Arc::new(
             move |buffer: &[u8], address: Option<IpEndpoint>| -> std::result::Result<(), ()> {
@@ -289,14 +286,8 @@ impl SmolStackWithDevice {
         ip_addrs: Vec<IpCidr>,
     ) -> SmolStackWithDevice {
         let mtu = mtu.unwrap_or(DEFAULT_MTU);
-        let should_stack_thread_stop = Arc::new(AtomicBool::new(false));
-        
 
-        let device = TapDevice::new(
-            interface_name,
-        )
-        .unwrap();
-
+        let device = TapDevice::new(interface_name).unwrap();
         let ip_address = address.unwrap_or(IpCidr::new(IpAddress::v4(192, 168, 69, 2), 24));
         let mut routes = Routes::new(BTreeMap::new());
 
@@ -341,13 +332,8 @@ impl SmolStackWithDevice {
         ip_addrs: Vec<IpCidr>,
     ) -> SmolStackWithDevice {
         let mtu = mtu.unwrap_or(DEFAULT_MTU);
-        let should_stack_thread_stop = Arc::new(AtomicBool::new(false));
-        
 
-        let device = TunDevice::new(
-            interface_name,
-        )
-        .unwrap();
+        let device = TunDevice::new(interface_name).unwrap();
 
         let ip_address = address.unwrap_or(IpCidr::new(IpAddress::v4(192, 168, 69, 2), 24));
         let mut routes = Routes::new(BTreeMap::new());
@@ -384,7 +370,11 @@ impl SmolStackWithDevice {
     }
 
     fn get_write_wake_deque(&self) -> Arc<Mutex<VecDeque<Waker>>> {
-        for_each_device!(self, |stack| stack.write_wake_deque.as_ref().unwrap().clone())
+        for_each_device!(self, |stack| stack
+            .write_wake_deque
+            .as_ref()
+            .unwrap()
+            .clone())
     }
 
     fn should_stop(&self) -> bool {
@@ -395,7 +385,7 @@ impl SmolStackWithDevice {
 
     pub fn add_tcp_socket(
         &mut self,
-        stack: Arc<Mutex<Self>>,
+        //stack: Arc<Mutex<Self>>,
         on_tcp_socket_data: Option<OnTcpSocketData>,
     ) -> Result<SocketHandle, ()> {
         for_each_device!(self, |stack_| {
@@ -403,7 +393,6 @@ impl SmolStackWithDevice {
             let tx_buffer = TcpSocketBuffer::new(vec![0; 65000]);
             let socket = TcpSocket::new(rx_buffer, tx_buffer);
             let handle = stack_.sockets.add(socket);
-            
             stack_.socket_handles.insert(
                 handle,
                 (SocketType::TCP, OnSocketData::tcp(on_tcp_socket_data)),
@@ -415,7 +404,7 @@ impl SmolStackWithDevice {
 
     pub fn add_udp_socket(
         &mut self,
-        stack: Arc<Mutex<Self>>,
+        //stack: Arc<Mutex<Self>>,
         on_socket_data: Option<OnUdpSocketData>,
     ) -> Result<SocketHandle, ()> {
         for_each_device!(self, |stack_| {
@@ -471,7 +460,6 @@ impl SmolStackWithDevice {
 
             match stack.interface.poll(&mut stack.sockets, timestamp) {
                 Ok(b) => Ok(b),
-                //Err(SmoltcpError::Exhausted) => self.poll(),
                 Err(e) => {
                     panic!("{}", e);
                 }
@@ -500,17 +488,16 @@ impl SmolStackWithDevice {
     }
 
     pub fn spin_udp<DeviceT: for<'d> Device<'d>>(
-        stack: &mut SmolStack< DeviceT>,
+        stack: &mut SmolStack<DeviceT>,
         socket_handle: &SocketHandle,
         on_udp_socket_data: OnUdpSocketData,
     ) -> std::result::Result<(), SpinError> {
         let mut socket = stack.sockets.get::<UdpSocket>(socket_handle.clone());
         if socket.can_recv() {
             let (buffer, endpoint) = socket.recv().unwrap();
-            //if let Some(on_udp_socket_data) = on_socket_data.on_udp {
             let addr = endpoint.addr;
             let port = endpoint.port;
-            let addr = match addr {
+            let addr: IpAddr = match addr {
                 IpAddress::Ipv4(ipv4) => IpAddr::V4(ipv4.into()),
                 IpAddress::Ipv6(ipv6) => IpAddr::V6(ipv6.into()),
                 _ => return Err(SpinError::Unknown("spin address conversion error".into())),
@@ -520,7 +507,6 @@ impl SmolStackWithDevice {
                 Err(_) => return Err(SpinError::NoCallback),
             }
         }
-        //}
         Ok(())
     }
 
@@ -574,16 +560,19 @@ impl SmolStackWithDevice {
 pub struct SmolSocket {
     socket_handle: SocketHandle,
     stack: Arc<Mutex<SmolStackWithDevice>>,
-    queue: Arc<Mutex<(VecDeque<Vec::<u8>>, VecDeque::<Waker>)>>,
+    queue: Arc<Mutex<(VecDeque<Vec<u8>>, VecDeque<Waker>)>>,
 }
 
 impl SmolSocket {
     pub fn new(
         stack: Arc<Mutex<SmolStackWithDevice>>,
         stack_ref: &mut SmolStackWithDevice,
-    ) -> Result<SmolSocket,()> {
+    ) -> Result<SmolSocket, ()> {
         //TODO: DOES THIS MUTEX BLOCK A FUTURE????
-        let queue = Arc::new(Mutex::new((VecDeque::<Vec::<u8>>::new(), VecDeque::<Waker>::new())));
+        let queue = Arc::new(Mutex::new((
+            VecDeque::<Vec<u8>>::new(),
+            VecDeque::<Waker>::new(),
+        )));
         let queue_ = queue.clone();
         let on_data = Arc::new(move |data: &[u8]| -> Result<usize, SocketReceiveError> {
             //TODO: can/should I block here?
@@ -594,16 +583,14 @@ impl SmolSocket {
             }
             Ok(data.len())
         });
-        let socket_handle = stack_ref.add_tcp_socket(stack.clone(), Some(on_data));
+        let socket_handle = stack_ref.add_tcp_socket(Some(on_data));
         //smol_socket.map_err(|_|())
-        
         Ok(SmolSocket {
-            socket_handle: socket_handle.map_err(|_|())?,
+            socket_handle: socket_handle.map_err(|_| ())?,
             stack: stack.clone(),
             queue: queue.clone(),
             //wake_deque: Arc::new(Mutex::new(VecDeque::new()))
         })
-        
     }
     /*
     pub async fn on_lock<F, Fut>(&mut self, f: F)
@@ -612,12 +599,10 @@ impl SmolSocket {
         Fut: Future<Output = ()>,
     {
         let stack_ref = self.stack.lock().await;
-        
         let mut locked_smol_socket = LockedSmolSocket {
             socket_handle: self.socket_handle.clone(),
             stack: &stack_ref,
         };
-        
         f(&mut locked_smol_socket).await
     }
     */
@@ -643,7 +628,6 @@ impl AsyncRead for SmolSocket {
             queue.1.push_back(cx.waker().clone());
             Poll::Pending
         }
-        
     }
 }
 #[cfg(feature = "async")]
@@ -677,7 +661,7 @@ impl AsyncWrite for SmolSocket {
 pub type SafeSmolStackWithDevice = SmolStackWithDevice;
 
 //TODO: instead, implement Send for the C types?
-unsafe impl Send for SafeSmolStackWithDevice{}
+unsafe impl Send for SafeSmolStackWithDevice {}
 
 #[cfg(feature = "async")]
 impl AsyncSocket for SmolSocket {
