@@ -160,15 +160,14 @@ impl SmolStackWithDevice {
     #[cfg(feature = "vpn")]
     pub fn new_from_vpn(
         interface_name: &str,
-        address: Option<IpCidr>,
+        //address: Option<IpCidr>,
         default_v4_gateway: Option<Ipv4Address>,
         default_v6_gateway: Option<Ipv6Address>,
         mtu: Option<usize>,
-        ip_addrs: Vec<IpCidr>,
+        ip_addrs: Option<Vec<IpCidr>>,
         vpn_client: Arc<Mutex<dyn VpnClient + Send>>,
     ) -> SmolStackWithDevice {
         let mtu = mtu.unwrap_or(DEFAULT_MTU);
-        let should_stack_thread_stop = Arc::new(AtomicBool::new(false));
         let vpn_client_ = vpn_client.clone();
         let on_virtual_tun_read = Arc::new(
             move |buffer: &mut [u8]| -> std::result::Result<usize, VirtualTunReadError> {
@@ -241,28 +240,28 @@ impl SmolStackWithDevice {
         )
         .unwrap();
 
-        let ip_address = address.unwrap_or(IpCidr::new(IpAddress::v4(192, 168, 69, 2), 24));
+        let default_ip_address = IpCidr::new(IpAddress::v4(192, 168, 69, 2), 24);
         let mut routes = Routes::new(BTreeMap::new());
 
+        let default_v4_gateway = default_v4_gateway.unwrap_or(Ipv4Address::new(192, 168, 69, 100));
+
         routes
-            .add_default_ipv4_route(default_v4_gateway.unwrap())
+            .add_default_ipv4_route(default_v4_gateway)
             .unwrap();
 
         if default_v6_gateway.is_some() {
+            //TODO: find a good ipv6 to use
+            let default_v6_gateway =
+            default_v6_gateway.unwrap_or(Ipv6Address::new(1, 1, 1, 1, 1, 1, 1, 1));
             routes
-                .add_default_ipv6_route(default_v6_gateway.unwrap())
+                .add_default_ipv6_route(default_v6_gateway)
                 .unwrap();
         }
-
+        let ip_addrs = ip_addrs.unwrap_or(vec![default_ip_address]);
         let interface = InterfaceBuilder::new(device)
             .ip_addrs(ip_addrs)
             .routes(routes)
             .finalize();
-
-        let default_v4_gateway = default_v4_gateway.unwrap_or(Ipv4Address::new(192, 168, 69, 100));
-        //TODO: find a good ipv6 to use
-        let default_v6_gateway =
-            default_v6_gateway.unwrap_or(Ipv6Address::new(1, 1, 1, 1, 1, 1, 1, 1));
 
         let socket_set = SocketSet::new(vec![]);
 
@@ -283,21 +282,26 @@ impl SmolStackWithDevice {
         default_v4_gateway: Option<Ipv4Address>,
         default_v6_gateway: Option<Ipv6Address>,
         mtu: Option<usize>,
-        ip_addrs: Vec<IpCidr>,
+        ip_addrs: Option<Vec<IpCidr>>,
     ) -> SmolStackWithDevice {
         let mtu = mtu.unwrap_or(DEFAULT_MTU);
 
         let device = TapDevice::new(interface_name).unwrap();
-        let ip_address = address.unwrap_or(IpCidr::new(IpAddress::v4(192, 168, 69, 2), 24));
+        let default_ip_address = address.unwrap_or(IpCidr::new(IpAddress::v4(192, 168, 69, 2), 24));
         let mut routes = Routes::new(BTreeMap::new());
+        let ip_addrs = ip_addrs.unwrap_or(vec![default_ip_address]);
+        let default_v4_gateway = default_v4_gateway.unwrap_or(Ipv4Address::new(192, 168, 69, 100));
 
         routes
-            .add_default_ipv4_route(default_v4_gateway.unwrap())
+            .add_default_ipv4_route(default_v4_gateway)
             .unwrap();
 
         if default_v6_gateway.is_some() {
+            //TODO: find a good ipv6 to use
+            let default_v6_gateway =
+            default_v6_gateway.unwrap_or(Ipv6Address::new(1, 1, 1, 1, 1, 1, 1, 1));
             routes
-                .add_default_ipv6_route(default_v6_gateway.unwrap())
+                .add_default_ipv6_route(default_v6_gateway)
                 .unwrap();
         }
 
@@ -305,10 +309,6 @@ impl SmolStackWithDevice {
             .ip_addrs(ip_addrs)
             .routes(routes)
             .finalize();
-
-        let default_v4_gateway = default_v4_gateway.unwrap_or(Ipv4Address::new(192, 168, 69, 100));
-        let default_v6_gateway =
-            default_v6_gateway.unwrap_or(Ipv6Address::new(1, 1, 1, 1, 1, 1, 1, 1));
 
         let socket_set = SocketSet::new(vec![]);
 
@@ -329,22 +329,27 @@ impl SmolStackWithDevice {
         default_v4_gateway: Option<Ipv4Address>,
         default_v6_gateway: Option<Ipv6Address>,
         mtu: Option<usize>,
-        ip_addrs: Vec<IpCidr>,
+        ip_addrs: Option<Vec<IpCidr>>,
     ) -> SmolStackWithDevice {
         let mtu = mtu.unwrap_or(DEFAULT_MTU);
 
         let device = TunDevice::new(interface_name).unwrap();
 
-        let ip_address = address.unwrap_or(IpCidr::new(IpAddress::v4(192, 168, 69, 2), 24));
+        let default_ip_address = address.unwrap_or(IpCidr::new(IpAddress::v4(192, 168, 69, 2), 24));
         let mut routes = Routes::new(BTreeMap::new());
+        let ip_addrs = ip_addrs.unwrap_or(vec![default_ip_address]);
+        let default_v4_gateway = default_v4_gateway.unwrap_or(Ipv4Address::new(192, 168, 69, 100));
 
         routes
-            .add_default_ipv4_route(default_v4_gateway.unwrap())
+            .add_default_ipv4_route(default_v4_gateway)
             .unwrap();
 
         if default_v6_gateway.is_some() {
+            //TODO: find a good ipv6 to use
+            let default_v6_gateway =
+            default_v6_gateway.unwrap_or(Ipv6Address::new(1, 1, 1, 1, 1, 1, 1, 1));
             routes
-                .add_default_ipv6_route(default_v6_gateway.unwrap())
+                .add_default_ipv6_route(default_v6_gateway)
                 .unwrap();
         }
 
@@ -352,10 +357,6 @@ impl SmolStackWithDevice {
             .ip_addrs(ip_addrs)
             .routes(routes)
             .finalize();
-
-        let default_v4_gateway = default_v4_gateway.unwrap_or(Ipv4Address::new(192, 168, 69, 100));
-        let default_v6_gateway =
-            default_v6_gateway.unwrap_or(Ipv6Address::new(1, 1, 1, 1, 1, 1, 1, 1));
 
         let socket_set = SocketSet::new(vec![]);
 
@@ -405,13 +406,17 @@ impl SmolStackWithDevice {
     pub fn add_udp_socket(
         &mut self,
         //stack: Arc<Mutex<Self>>,
-        on_socket_data: Option<OnUdpSocketData>,
+        on_udp_socket_data: Option<OnUdpSocketData>,
     ) -> Result<SocketHandle, ()> {
         for_each_device!(self, |stack_| {
             let rx_buffer = UdpSocketBuffer::new(Vec::new(), vec![0; 1024]);
             let tx_buffer = UdpSocketBuffer::new(Vec::new(), vec![0; 1024]);
             let socket = UdpSocket::new(rx_buffer, tx_buffer);
             let handle = stack_.sockets.add(socket);
+            stack_.socket_handles.insert(
+                handle,
+                (SocketType::TCP, OnSocketData::udp(on_udp_socket_data)),
+            );
             Ok(handle)
         })
     }
@@ -457,7 +462,6 @@ impl SmolStackWithDevice {
     pub fn poll(&mut self) -> SmoltcpResult<bool> {
         for_each_device!(self, |stack| {
             let timestamp = Instant::now();
-
             match stack.interface.poll(&mut stack.sockets, timestamp) {
                 Ok(b) => Ok(b),
                 Err(e) => {
@@ -584,28 +588,12 @@ impl SmolSocket {
             Ok(data.len())
         });
         let socket_handle = stack_ref.add_tcp_socket(Some(on_data));
-        //smol_socket.map_err(|_|())
         Ok(SmolSocket {
             socket_handle: socket_handle.map_err(|_| ())?,
             stack: stack.clone(),
             queue: queue.clone(),
-            //wake_deque: Arc::new(Mutex::new(VecDeque::new()))
         })
     }
-    /*
-    pub async fn on_lock<F, Fut>(&mut self, f: F)
-    where
-        F: Fn(&mut LockedSmolSocket)-> Fut,
-        Fut: Future<Output = ()>,
-    {
-        let stack_ref = self.stack.lock().await;
-        let mut locked_smol_socket = LockedSmolSocket {
-            socket_handle: self.socket_handle.clone(),
-            stack: &stack_ref,
-        };
-        f(&mut locked_smol_socket).await
-    }
-    */
 }
 
 #[cfg(feature = "async")]
